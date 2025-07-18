@@ -1,5 +1,17 @@
-import { supabase } from '../lib/supabase';
 import { authService } from './authService';
+import { 
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  updateDoc,
+  doc,
+  serverTimestamp,
+  orderBy,
+  Timestamp,
+} from 'firebase/firestore';
+import { db } from './firebase'; // Assuming you have a firebase config file
 
 export interface Pickup {
   id: string;
@@ -11,8 +23,8 @@ export interface Pickup {
   estimated_weight: number;
   remarks: string;
   status: 'scheduled' | 'cancelled' | 'completed';
-  created_at: string;
-  updated_at: string;
+  created_at: Timestamp;
+  updated_at: Timestamp;
 }
 
 export interface CreatePickupData {
@@ -25,6 +37,8 @@ export interface CreatePickupData {
 }
 
 class PickupService {
+  private pickupsCollection = collection(db, 'pickups');
+
   // Create a new pickup
   async createPickup(data: CreatePickupData): Promise<{ success: boolean; pickup?: Pickup; message: string }> {
     try {
@@ -36,25 +50,24 @@ class PickupService {
         };
       }
 
-      // Set user context for RLS
-      await supabase.rpc('set_config', {
-        setting_name: 'app.current_user_phone',
-        setting_value: user.phone,
-        is_local: false
+      const docRef = await addDoc(this.pickupsCollection, {
+        user_id: user.uid,
+        ...data,
+        estimated_weight: Number(data.estimated_weight),
+        status: 'scheduled',
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp()
       });
 
-      const { data: pickup, error } = await supabase
-        .from('pickups')
-        .insert({
-          user_id: user.id,
-          ...data,
-          estimated_weight: Number(data.estimated_weight)
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
+      const pickup: Pickup = {
+        id: docRef.id,
+        user_id: user.uid,
+        ...data,
+        status: 'scheduled',
+        created_at: Timestamp.now(), 
+        updated_at: Timestamp.now()
+      };
+      
       return {
         success: true,
         pickup,
@@ -80,19 +93,9 @@ class PickupService {
         };
       }
 
-      // Set user context for RLS
-      await supabase.rpc('set_config', {
-        setting_name: 'app.current_user_phone',
-        setting_value: user.phone,
-        is_local: false
-      });
-
-      const { data: pickups, error } = await supabase
-        .from('pickups')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const q = query(this.pickupsCollection, where('user_id', '==', user.uid), orderBy('created_at', 'desc'));
+      const querySnapshot = await getDocs(q);
+      const pickups = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Pickup));
 
       return {
         success: true,
@@ -119,19 +122,11 @@ class PickupService {
         };
       }
 
-      // Set user context for RLS
-      await supabase.rpc('set_config', {
-        setting_name: 'app.current_user_phone',
-        setting_value: user.phone,
-        is_local: false
+      const pickupDoc = doc(this.pickupsCollection, pickupId);
+      await updateDoc(pickupDoc, {
+        status,
+        updated_at: serverTimestamp()
       });
-
-      const { error } = await supabase
-        .from('pickups')
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq('id', pickupId);
-
-      if (error) throw error;
 
       return {
         success: true,
