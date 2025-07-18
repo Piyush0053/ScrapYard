@@ -1,138 +1,80 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+
 import { useNavigate } from 'react-router-dom';
-import { Recycle, Facebook, Instagram, Twitter } from 'lucide-react';
-import { authService } from '../services/authService';
+import { signInWithGoogle, sendOTP, setupRecaptcha } from '../services/authService';
+import { saveUserToDatabase } from '../services/userService';
 
 const LoginPage: React.FC = () => {
-  const [phone, setPhone] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-    
-    if (phone.length !== 10) {
-      setError('Please enter a valid 10-digit mobile number');
-      return;
+  useEffect(() => {
+    setupRecaptcha('recaptcha-container');
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    try {
+      const user = await signInWithGoogle();
+      await saveUserToDatabase({
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        phoneNumber: user.phoneNumber,
+      });
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error with Google Sign-In:', error);
     }
-    
-    if (!/^\d{10}$/.test(phone)) {
-      setError('Mobile number should contain only digits');
-      return;
+  };
+
+  const handlePhoneSignIn = async () => {
+    try {
+      await sendOTP('+91' + phoneNumber); // Assuming Indian phone numbers
+      navigate('/otp');
+    } catch (error) {
+      console.error('Error sending OTP:', error);
     }
-    
-      setLoading(true);
-      
-      const result = await authService.sendOTP(`+91${phone}`);
-      
-      if (result.success) {
-        setSuccess(result.message);
-        // Navigate after a short delay to show success message
-        setTimeout(() => {
-        navigate('/otp', { state: { phone: `+91${phone}` } });
-        }, 1500);
-      } else {
-        setError(result.message);
-      }
-      
-      setLoading(false);
   };
 
   return (
-    <div className="page-container">
-      <div className="left-section">
+    <div className="flex items-center justify-center h-screen bg-gray-100">
+      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
+        <h2 className="text-2xl font-bold text-center">Login</h2>
         <div>
-          <div className="logo">
-            <Recycle size={32} />
-            <span>Sustainify</span>
-          </div>
-          
-          <div className="main-content">
-            <h1>
-              Sell your recyclables online with{' '}
-              <span className="highlight">sustainify!</span>
-            </h1>
-            <p>
-              Make a difference and earn money with Sustainify. Sell your
-              recyclables online, hassle-free. Join the sustainable revolution
-              now!
-            </p>
-            <div className="categories">
-              Paper - Plastics - Metals - Appliances
-            </div>
-          </div>
+          <button
+            onClick={handleGoogleSignIn}
+            className="w-full px-4 py-2 font-bold text-white bg-red-500 rounded-md hover:bg-red-600"
+          >
+            Sign in with Google
+          </button>
         </div>
-
+        <div className="flex items-center justify-center">
+          <hr className="w-full" />
+          <span className="px-2 font-bold text-gray-500">OR</span>
+          <hr className="w-full" />
+        </div>
         <div>
-          <div className="process-flow">
-            <div className="process-step">
-              <h3>Schedule</h3>
-              <p>a Pickup</p>
-            </div>
-            <div className="arrow">→</div>
-            <div className="process-step">
-              <h3>Pickup at</h3>
-              <p>your Address</p>
-            </div>
-            <div className="arrow">→</div>
-            <div className="process-step">
-              <h3>Receive</h3>
-              <p>Payment</p>
-            </div>
-          </div>
-          
-          <div className="social-links">
-            <a href="#" className="social-link facebook">
-              <Facebook size={20} />
-            </a>
-            <a href="#" className="social-link instagram">
-              <Instagram size={20} />
-            </a>
-            <a href="#" className="social-link twitter">
-              <Twitter size={20} />
-            </a>
-          </div>
+          <label htmlFor="phone" className="block mb-2 text-sm font-medium text-gray-700">
+            Phone Number
+          </label>
+          <input
+            type="tel"
+            id="phone"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            placeholder="Enter your phone number"
+          />
         </div>
-
-        <div className="illustration">
-          Recycling Illustration
+        <div>
+          <button
+            onClick={handlePhoneSignIn}
+            className="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded-md hover:bg-blue-600"
+          >
+            Send OTP
+          </button>
         </div>
-      </div>
-
-      <div className="right-section">
-        <div className="form-container">
-          <h2>Schedule a Pickup ?</h2>
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label>Mobile</label>
-              <div className="phone-input">
-                <span className="country-code">+91</span>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Enter your mobile number"
-                  maxLength={10}
-                  required
-                  disabled={loading}
-                />
-              </div>
-              {success && <div style={{ color: '#4CAF50', fontSize: '0.9rem', marginTop: '0.5rem' }}>{success}</div>}
-              {error && <div style={{ color: '#ff6b6b', fontSize: '0.9rem', marginTop: '0.5rem' }}>{error}</div>}
-            </div>
-            <button type="submit" className="btn btn-primary btn-large" disabled={loading || phone.length !== 10}>
-              {loading ? 'Sending OTP...' : 'Book'}
-            </button>
-          </form>
-          <div className="bottom-links">
-            <span></span>
-            <a href="#" className="link">Facing Issues? Contact Us</a>
-          </div>
-        </div>
+        <div id="recaptcha-container"></div>
       </div>
     </div>
   );
