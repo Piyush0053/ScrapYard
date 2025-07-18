@@ -1,8 +1,8 @@
-const API_BASE_URL = 'http://localhost:3001'; // Replace with your backend API URL
+const API_BASE_URL = '/api'; // Using the proxy
 
 export const saveUserToDatabase = async (userData: any) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/users`, {
+    const response = await fetch(`${API_BASE_URL}/users`, { // Updated URL
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
